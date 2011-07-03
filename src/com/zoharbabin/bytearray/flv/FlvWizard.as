@@ -30,15 +30,159 @@ package com.zoharbabin.bytearray.flv
 		 */		
 		public static const VIDEO_CHANNEL:int = 0x4;
 		
-		private static const AUDIO_TAG:int = 0x08;
-		private static const VIDEO_TAG:int = 0x09;
-		private static const SCRIPT_TAG:int = 0x12;
-		private static const SIGNATURE:String = "FLV";
-		private static const METADATA:String = "onMetaData";
-		private static const DURATION:String = "duration";
-		private static const CANSEEKEND:String = "canSeekToEnd";
-		private static const CREATOR:String = "metadatacreator";
-		private static const CREDITS:String = "FlvWizard 1.0 by Zohar Babin";
+		protected static const AUDIO_TAG:int = 0x08;
+		protected static const VIDEO_TAG:int = 0x09;
+		protected static const SCRIPT_TAG:int = 0x12;
+		protected static const SIGNATURE:String = "FLV";
+		protected static const METADATA:String = "onMetaData";
+		protected static const DURATION:String = "duration";
+		protected static const CANSEEKEND:String = "canSeekToEnd";
+		protected static const CREATOR:String = "metadatacreator";
+		protected static const CREDITS:String = "FlvWizard 1.0 by Zohar Babin";
+		
+		/**
+		 * Utility function to find the position in a given FLV bytearray of the start of body tags. 
+		 * @param input		The FLV bytearray to find it's first tag position.
+		 * @return 			The position in the given bytearray of the first body tag.
+		 * 
+		 */		
+		protected function findTagsStart (input:ByteArray):uint 
+		{
+			input.position = 0;
+			var signature:String = input.readUTFBytes(3);
+			if ( signature != FlvWizard.SIGNATURE ) throw new Error("Not a valid VIDEO FLV file.");
+			var version:int = input.readByte();
+			var infos:int = input.readByte();
+			var typeFlagsReserved1:int = (infos >> 3);
+			var typeFlagsAudio:int = ((infos & 0x4 ) >> 2);
+			var typeFlagsReserved2:int = ((infos & 0x2 ) >> 1);
+			var typeFlagsVideo:int = (infos & 0x1);
+			var dataOffset:int = input.readUnsignedInt();
+			var position:uint = input.position + 4;
+			return position;
+		}
+		
+		/**
+		 * Creates an FLV header. 
+		 * @param hasVideo		Will this FLV have Video tags. 
+		 * @param hasAudio		Will this FLV have Audio tags.
+		 * @return 		An FLV header.
+		 * 
+		 */				
+		protected function createFLVHeader (hasVideo:Boolean, hasAudio:Boolean):ByteArray 
+		{
+			var flvHeader:ByteArray = new ByteArray ();
+			flvHeader.writeByte(0x46); //F
+			flvHeader.writeByte(0x4C); //L
+			flvHeader.writeByte(0x56); //V
+			flvHeader.writeByte(0x01); //Version 1.0
+			var audioVideo:uint = 0; 
+			if (hasVideo) audioVideo += 1; //does this FLV has video
+			if (hasAudio) audioVideo += 4; //does this FLV has audio
+			flvHeader.writeByte(audioVideo);
+			flvHeader.writeUnsignedInt(0x09); //size of header in 32bit unsigned int
+			flvHeader.writeUnsignedInt(0); //PreviousTagSize0 - this always 0, there are no tags before
+			return flvHeader;
+		}
+		
+		/**
+		 * Creates a template metadata tag. 
+		 * @return 	An array containing 1: a valid FLV metadata tag, and 2: the position inside the metadata of the duration variable.
+		 * 
+		 */		
+		protected function createMetaData ():Array 
+		{
+			//create the metadata tag body
+			var metadataBody:ByteArray = new ByteArray ();
+			metadataBody.writeByte(2); // type String for array script tag name
+			// the metadata tag name
+			metadataBody.writeBytes(writeString(FlvWizard.METADATA));
+			// array of metadata variables
+			metadataBody.writeByte(8); // type: SCRIPTDATAECMAARRAY
+			metadataBody.writeUnsignedInt(3); //ECMAArrayLength
+			var durationPos:uint = metadataBody.position;
+			metadataBody.writeBytes(writeNumberVariable(FlvWizard.DURATION, 0));
+			metadataBody.writeBytes(writeBooleanVariable(FlvWizard.CANSEEKEND, 1));
+			metadataBody.writeBytes(writeString(FlvWizard.CREATOR)); //id of string variable
+			metadataBody.writeByte(2); //type string
+			metadataBody.writeBytes(writeString(FlvWizard.CREDITS)); //value of string variable
+			// SCRIPTDATAOBJECTEND 
+			metadataBody.writeShort(9 >> 8);
+			metadataBody.writeByte(9 & 0xff);
+			
+			//wrap the body with the tag 
+			var metadataTag:ByteArray = new ByteArray ();
+			metadataTag.writeByte(FlvWizard.SCRIPT_TAG);
+			// DataSize - the size of the metadata tag (we'll fill it after creating the tag)
+			var dataSize:uint = metadataBody.length;
+			metadataTag.writeShort(dataSize >> 8);
+			metadataTag.writeByte(dataSize & 0xff);
+			// Timestamp
+			metadataTag.writeShort(0);
+			metadataTag.writeByte(0);
+			// TimestampExtended
+			metadataTag.writeByte(0);
+			// StreamID (0)
+			metadataTag.writeShort(0);
+			metadataTag.writeByte(0);
+			durationPos += metadataTag.position; // get the position of the duration var for later update
+			metadataTag.writeBytes(metadataBody);
+			metadataTag.writeUnsignedInt(11+metadataTag.position); // PreviousTagSize1 (metadata should be the first tag)
+			return [metadataTag, durationPos];
+		}
+		
+		/**
+		 * Creates a Boolean type variable according to the FLV specs. 
+		 * @param varName		The name of the variable.
+		 * @param boolValue		The value of the variable.
+		 * @return 	A bytearray containing the variable.
+		 * 
+		 */		
+		protected function writeBooleanVariable (varName:String, boolValue:int):ByteArray
+		{
+			var bytes:ByteArray = new ByteArray ();
+			bytes.writeBytes(writeString(varName));
+			bytes.writeByte(1); //type boolean
+			bytes.writeByte(boolValue);
+			return bytes;
+		}
+		
+		/**
+		 * Creates a Number type variable according to the FLV specs. 
+		 * @param varName		The name of the variable.
+		 * @param numValue		The value of the variable.
+		 * @return 	A bytearray containing the variable.
+		 * 
+		 */		
+		protected function writeNumberVariable (varName:String, numValue:Number):ByteArray
+		{
+			var bytes:ByteArray = new ByteArray ();
+			bytes.writeBytes(writeString(varName));
+			bytes.writeByte(0); //type number
+			bytes.writeDouble(numValue);
+			return bytes;
+		}
+		
+		/**
+		 * Encodes a String according to the FLV specs. 
+		 * @param string2write		The value of the String to encode.
+		 * @return 	A bytearray containing the encoded String.
+		 * 
+		 */	
+		protected function writeString (string2write:String):ByteArray 
+		{
+			var bytes:ByteArray = new ByteArray ();
+			bytes.writeShort(string2write.length); // SCRIPTDATASTRING length
+			bytes.writeUTFBytes(string2write); // SCRIPTDATASTRING value
+			return bytes;
+		}
+		
+		protected function writeTag (input:ByteArray):ByteArray 
+		{
+			var bytes:ByteArray = new ByteArray ();
+			input
+			return bytes;
+		}
 		
 		/**
 		 * Given an FLV bytearray, extracts and returns a new FLV that contains either the audio or the video of the given FLV.
@@ -98,149 +242,12 @@ package com.zoharbabin.bytearray.flv
 			}
 			
 			if (channel == FlvWizard.SOUND_CHANNEL) {
-					return _sound;
+				return _sound;
 			} else if (channel == FlvWizard.VIDEO_CHANNEL) {
-					return _video;
+				return _video;
 			} else {
 				throw(new Error("Can only handle audio or video tags, please validate that channel value is either FlvWizard.SOUND_CHANNEL or FlvWizard.VIDEO_CHANNEL."));
 			}
-		}
-		
-		/**
-		 * Utility function to find the position in a given FLV bytearray of the start of body tags. 
-		 * @param input		The FLV bytearray to find it's first tag position.
-		 * @return 			The position in the given bytearray of the first body tag.
-		 * 
-		 */		
-		public function findTagsStart (input:ByteArray):uint 
-		{
-			input.position = 0;
-			var signature:String = input.readUTFBytes(3);
-			if ( signature != FlvWizard.SIGNATURE ) throw new Error("Not a valid VIDEO FLV file.");
-			var version:int = input.readByte();
-			var infos:int = input.readByte();
-			var typeFlagsReserved1:int = (infos >> 3);
-			var typeFlagsAudio:int = ((infos & 0x4 ) >> 2);
-			var typeFlagsReserved2:int = ((infos & 0x2 ) >> 1);
-			var typeFlagsVideo:int = (infos & 0x1);
-			var dataOffset:int = input.readUnsignedInt();
-			var position:uint = input.position + 4;
-			return position;
-		}
-		
-		/**
-		 * Creates an FLV header. 
-		 * @param hasVideo		Will this FLV have Video tags. 
-		 * @param hasAudio		Will this FLV have Audio tags.
-		 * @return 		An FLV header.
-		 * 
-		 */				
-		private function createFLVHeader (hasVideo:Boolean, hasAudio:Boolean):ByteArray 
-		{
-			var flvHeader:ByteArray = new ByteArray ();
-			flvHeader.writeByte(0x46); //F
-			flvHeader.writeByte(0x4C); //L
-			flvHeader.writeByte(0x56); //V
-			flvHeader.writeByte(0x01); //Version 1.0
-			var audioVideo:uint = 0; 
-			if (hasVideo) audioVideo += 1; //does this FLV has video
-			if (hasAudio) audioVideo += 4; //does this FLV has audio
-			flvHeader.writeByte(audioVideo);
-			flvHeader.writeUnsignedInt(0x09); //size of header in 32bit unsigned int
-			flvHeader.writeUnsignedInt(0); //PreviousTagSize0 - this always 0, there are no tags before
-			return flvHeader;
-		}
-		
-		/**
-		 * Creates a template metadata tag. 
-		 * @return 	An array containing 1: a valid FLV metadata tag, and 2: the position inside the metadata of the duration variable.
-		 * 
-		 */		
-		private function createMetaData ():Array 
-		{
-			//create the metadata tag body
-			var metadataBody:ByteArray = new ByteArray ();
-			metadataBody.writeByte(2); // type String for array script tag name
-			// the metadata tag name
-			metadataBody.writeBytes(writeString(FlvWizard.METADATA));
-			// array of metadata variables
-			metadataBody.writeByte(8); // type: SCRIPTDATAECMAARRAY
-			metadataBody.writeUnsignedInt(3); //ECMAArrayLength
-			var durationPos:uint = metadataBody.position;
-			metadataBody.writeBytes(writeNumberVariable(FlvWizard.DURATION, 0));
-			metadataBody.writeBytes(writeBooleanVariable(FlvWizard.CANSEEKEND, 1));
-			metadataBody.writeBytes(writeString(FlvWizard.CREATOR)); //id of string variable
-			metadataBody.writeByte(2); //type string
-			metadataBody.writeBytes(writeString(FlvWizard.CREDITS)); //value of string variable
-			// SCRIPTDATAOBJECTEND 
-			metadataBody.writeShort(9 >> 8);
-			metadataBody.writeByte(9 & 0xff);
-			
-			//wrap the body with the tag 
-			var metadataTag:ByteArray = new ByteArray ();
-			metadataTag.writeByte(FlvWizard.SCRIPT_TAG);
-			// DataSize - the size of the metadata tag (we'll fill it after creating the tag)
-			var dataSize:uint = metadataBody.length;
-			metadataTag.writeShort(dataSize >> 8);
-			metadataTag.writeByte(dataSize & 0xff);
-			// Timestamp
-			metadataTag.writeShort(0);
-			metadataTag.writeByte(0);
-			// TimestampExtended
-			metadataTag.writeByte(0);
-			// StreamID (0)
-			metadataTag.writeShort(0);
-			metadataTag.writeByte(0);
-			durationPos += metadataTag.position; // get the position of the duration var for later update
-			metadataTag.writeBytes(metadataBody);
-			metadataTag.writeUnsignedInt(11+metadataTag.position); // PreviousTagSize1 (metadata should be the first tag)
-			return [metadataTag, durationPos];
-		}
-		
-		/**
-		 * Creates a Boolean type variable according to the FLV specs. 
-		 * @param varName		The name of the variable.
-		 * @param boolValue		The value of the variable.
-		 * @return 	A bytearray containing the variable.
-		 * 
-		 */		
-		private function writeBooleanVariable (varName:String, boolValue:int):ByteArray
-		{
-			var bytes:ByteArray = new ByteArray ();
-			bytes.writeBytes(writeString(varName));
-			bytes.writeByte(1); //type boolean
-			bytes.writeByte(boolValue);
-			return bytes;
-		}
-		
-		/**
-		 * Creates a Number type variable according to the FLV specs. 
-		 * @param varName		The name of the variable.
-		 * @param numValue		The value of the variable.
-		 * @return 	A bytearray containing the variable.
-		 * 
-		 */		
-		private function writeNumberVariable (varName:String, numValue:Number):ByteArray
-		{
-			var bytes:ByteArray = new ByteArray ();
-			bytes.writeBytes(writeString(varName));
-			bytes.writeByte(0); //type number
-			bytes.writeDouble(numValue);
-			return bytes;
-		}
-		
-		/**
-		 * Encodes a String according to the FLV specs. 
-		 * @param string2write		The value of the String to encode.
-		 * @return 	A bytearray containing the encoded String.
-		 * 
-		 */	
-		private function writeString (string2write:String):ByteArray 
-		{
-			var bytes:ByteArray = new ByteArray ();
-			bytes.writeShort(string2write.length); // SCRIPTDATASTRING length
-			bytes.writeUTFBytes(string2write); // SCRIPTDATASTRING value
-			return bytes;
 		}
 		
 		/**
@@ -321,6 +328,72 @@ package com.zoharbabin.bytearray.flv
 			// update the duration variable in the FLV metadata
 			_merged.position = durationVarPos;
 			_merged.writeBytes(writeNumberVariable(FlvWizard.DURATION, (timestampExtended1 << 8 | time1)/1000));
+			return _merged;
+		}
+		
+		/**
+		 * Given a Vector of FLV bytearray, returns a merged FLV bytearray of all given FLVs.  
+		 * @param streams	A vector of FLV bytearraus.
+		 * @return	A merged FLV that contains all given FLVs in sequential manner. 
+		 * 
+		 */		
+		public function concatStreams (streams:Vector.<ByteArray>):ByteArray 
+		{
+			var offset:int; 
+			var end:int;
+			var tagLength:int;
+			var currentTag:int;
+			var step:int;
+			var bodyTagHeader:int;
+			var streamID:int;
+			var time:int;
+			var timestampExtended:int;
+			var _merged:ByteArray = new ByteArray ();
+			
+			//write FLV header
+			_merged.writeBytes(createFLVHeader(true, true));
+			var posBeforeMetadata:int = _merged.position;
+			//write FLV metadata tag
+			var metadata:Array = createMetaData();
+			_merged.writeBytes(metadata[0]);
+			//calc position of duration var in metadata
+			var durationVarPos:uint = metadata[1] + posBeforeMetadata;
+			var beforeTimeRead:uint = 0;
+			var totalTime:uint = 0;
+			for each (var videoInput:ByteArray in streams) {
+				// skip the headers of the inputs
+				videoInput.position = findTagsStart(videoInput);
+				// run for all the tags in the inputs, syncing to the desired channel (video/audio input)
+				while ( videoInput.bytesAvailable > 0 )
+				{
+					// read tag N from input
+					offset = videoInput.position; 
+					currentTag = videoInput.readByte();
+					step = (videoInput.readUnsignedShort() << 8) | videoInput.readUnsignedByte();
+					beforeTimeRead = videoInput.position;
+					time = (videoInput.readUnsignedShort() << 8) | videoInput.readUnsignedByte();
+					timestampExtended = videoInput.readUnsignedByte();
+					videoInput.position = beforeTimeRead;
+					//override the time with the time of the channel we're syncing to:
+					videoInput.writeShort((time+totalTime) >> 8); //time upper 8bit
+					videoInput.writeByte((time+totalTime) & 0xff); //time lower
+					videoInput.writeByte(((time+totalTime)& 0xFF000000) >> 24); //TimestampExtended
+					streamID = ((videoInput.readUnsignedShort() << 8) | videoInput.readUnsignedByte());
+					bodyTagHeader = videoInput.readByte();
+					end = videoInput.position + step + 3;
+					tagLength = end - offset;
+					
+					// if it's not script-tags, write to the merged flv
+					if ( currentTag != FlvWizard.SCRIPT_TAG ) 
+						_merged.writeBytes(videoInput, offset, tagLength);
+					
+					videoInput.position = end;
+				}
+				totalTime += (timestampExtended & 0xFF000000) | time & 0xffff;
+			}
+			// update the duration variable in the FLV metadata
+			_merged.position = durationVarPos;
+			_merged.writeBytes(writeNumberVariable(FlvWizard.DURATION, (timestampExtended << 8 | time)/1000));
 			return _merged;
 		}
 	}
