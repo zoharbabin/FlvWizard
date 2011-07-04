@@ -1,4 +1,7 @@
 /**
+ * In addition to the MIT license, it is requested that if you make use of this code
+ * you should notify the author.
+ * 
  * This program is distributed under the terms of the MIT License as found 
  * in a file called LICENSE. If it is not present, the license
  * is always available at http://www.opensource.org/licenses/mit-license.php.
@@ -16,6 +19,7 @@ package com.zoharbabin.bytearray.flv
 	 * 
 	 * @author Zohar Babin
 	 * @see http://www.zoharbabin.com
+	 * @see https://github.com/zoharbabin/FlvWizard/
 	 * @see http://www.openscreenproject.org/about/publications.html
 	 * @see http://www.kaltura.org/demos/RemixGenderedAds/
 	 */	
