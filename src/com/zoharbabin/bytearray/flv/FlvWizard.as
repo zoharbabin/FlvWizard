@@ -434,6 +434,37 @@ package com.zoharbabin.bytearray.flv
 		}
 		
 		/**
+		 * Retrieves the duration of the video in millisec.
+		 * @param videoInput	the FLV bytearray to slice.
+		 * @return The duration of the video in millisec.
+		 */             
+		public function findDuration (videoInput:ByteArray):uint
+		{
+			var offset:int; 
+			var end:int;
+			var currentTag:int;
+			var step:int;
+			var bodyTagHeader:int;
+			var streamID:int;
+			var time:int = 0;
+			var timestampExtended:int;
+			videoInput.position = findTagsStart(videoInput);
+			while (videoInput.bytesAvailable > 0)
+			{
+				offset = videoInput.position; 
+				currentTag = videoInput.readByte();
+				step = (videoInput.readUnsignedShort() << 8) | videoInput.readUnsignedByte();
+				time = (videoInput.readUnsignedShort() << 8) | videoInput.readUnsignedByte();
+				timestampExtended = videoInput.readUnsignedByte();
+				streamID = ((videoInput.readUnsignedShort() << 8) | videoInput.readUnsignedByte());
+				bodyTagHeader = videoInput.readByte();
+				end = videoInput.position + step + 3;
+				videoInput.position = end;
+			}
+			return ((timestampExtended << 8) | time);
+		}
+		
+		/**
 		 * Given a Vector of FLV bytearray, returns a merged FLV bytearray of all given FLVs.  
 		 * @param streams	A vector of FLV bytearraus.
 		 * @return	A merged FLV that contains all given FLVs in sequential manner. 
