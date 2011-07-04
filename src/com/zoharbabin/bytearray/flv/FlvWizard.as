@@ -332,6 +332,78 @@ package com.zoharbabin.bytearray.flv
 		}
 		
 		/**
+		 * Slices (Clip) a given FLV bytearray according to given in and out points (millis).
+		 * @param videoInput	the FLV bytearray to slice.
+		 * @param start			in point in millisec.
+		 * @param end			out point in millisec.
+		 * @return	A newly clipped FLV of the given FLV according to the in and out points.
+		 */             
+		public function slice (videoInput:ByteArray, in_point:int, out_point:int):ByteArray
+		{
+			if ( out_point <= in_point ) throw new Error ("in point must be smaller than out point");
+			var offset:int; 
+			var end:int;
+			var tagLength:int;
+			var currentTag:int;
+			var step:int;
+			var bodyTagHeader:int;
+			var streamID:int;
+			var time:int = 0;
+			var timestampExtended:int;
+			var _sliced:ByteArray = new ByteArray ();
+			
+			//write FLV header
+			_sliced.writeBytes(createFLVHeader(true, true));
+			var posBeforeMetadata:int = _sliced.position;
+			//write FLV metadata tag
+			var metadata:Array = createMetaData();
+			_sliced.writeBytes(metadata[0]);
+			//calc position of duration var in metadata
+			var durationVarPos:uint = metadata[1] + posBeforeMetadata;
+			var beforeTimeRead:uint = 0;
+			// skip the headers of the inputs
+			videoInput.position = findTagsStart(videoInput);
+			// run for all the tags in the inputs, syncing to the desired channel (video/audio input)
+			var foundStart:Boolean = false;
+			var startTime:int = 0;
+			while ( (videoInput.bytesAvailable > 0) && (time <= out_point) )
+			{
+				// read tag N from input
+				offset = videoInput.position; 
+				currentTag = videoInput.readByte();
+				step = (videoInput.readUnsignedShort() << 8) | videoInput.readUnsignedByte();
+				beforeTimeRead = videoInput.position;
+				time = (videoInput.readUnsignedShort() << 8) | videoInput.readUnsignedByte();
+				timestampExtended = videoInput.readUnsignedByte();
+				if (time >= in_point && !foundStart) {
+					foundStart = true;
+					startTime = time;
+				}
+				if (time >= in_point) {
+					//override the time with the time of the channel we're syncing to:
+					videoInput.position = beforeTimeRead;
+					videoInput.writeShort((time-startTime) >> 8); //time upper 8bit
+					videoInput.writeByte((time-startTime) & 0xff); //time lower
+					videoInput.writeByte(((time-startTime)& 0xFF000000) >> 24); //TimestampExtended
+				}
+				streamID = ((videoInput.readUnsignedShort() << 8) | videoInput.readUnsignedByte());
+				bodyTagHeader = videoInput.readByte();
+				end = videoInput.position + step + 3;
+				tagLength = end - offset;
+				
+				// if it's time to cut and if it's not script-tags, write to the merged flv
+				if ( (time >= in_point) && (currentTag != FlvWizard.SCRIPT_TAG) ) 
+					_sliced.writeBytes(videoInput, offset, tagLength);
+				
+				videoInput.position = end;
+			}
+			// update the duration variable in the FLV metadata
+			_sliced.position = durationVarPos;
+			_sliced.writeBytes(writeNumberVariable(FlvWizard.DURATION, (timestampExtended << 8 | time)/1000));
+			return _sliced;
+		}
+		
+		/**
 		 * Given a Vector of FLV bytearray, returns a merged FLV bytearray of all given FLVs.  
 		 * @param streams	A vector of FLV bytearraus.
 		 * @return	A merged FLV that contains all given FLVs in sequential manner. 
@@ -373,8 +445,8 @@ package com.zoharbabin.bytearray.flv
 					beforeTimeRead = videoInput.position;
 					time = (videoInput.readUnsignedShort() << 8) | videoInput.readUnsignedByte();
 					timestampExtended = videoInput.readUnsignedByte();
-					videoInput.position = beforeTimeRead;
 					//override the time with the time of the channel we're syncing to:
+					videoInput.position = beforeTimeRead;
 					videoInput.writeShort((time+totalTime) >> 8); //time upper 8bit
 					videoInput.writeByte((time+totalTime) & 0xff); //time lower
 					videoInput.writeByte(((time+totalTime)& 0xFF000000) >> 24); //TimestampExtended

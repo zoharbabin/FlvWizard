@@ -48,9 +48,15 @@ package
 		// merge channels using FlvWizard
 		private function merge (event:MouseEvent):void {
 			//mergedBytes = flvwiz.mergeChannels(videoBytes, soundBytes);
-			var streams:Vector.<ByteArray> = new Vector.<ByteArray>();
+			/*var streams:Vector.<ByteArray> = new Vector.<ByteArray>();
 			streams[0] = girlVideo;
 			streams[1] = boyVideo;
+			mergedBytes = flvwiz.concatStreams(streams);*/
+			var a:ByteArray = flvwiz.slice(boyVideo, 1000, 4000);
+			var b:ByteArray = flvwiz.slice(girlVideo, 2000, 6000);
+			var streams:Vector.<ByteArray> = new Vector.<ByteArray>();
+			streams[0] = a;
+			streams[1] = b;
 			mergedBytes = flvwiz.concatStreams(streams);
 			playback (mergedBytes);
 			createButton ("4-Download", 240, saveFile);
