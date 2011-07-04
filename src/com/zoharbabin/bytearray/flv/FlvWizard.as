@@ -193,6 +193,7 @@ package com.zoharbabin.bytearray.flv
 		 */		
 		public function extractChannel (input:ByteArray, channel:uint):ByteArray
 		{
+			input = clone(input);
 			var offset:int; 
 			var end:int;
 			var tagLength:int;
@@ -260,6 +261,8 @@ package com.zoharbabin.bytearray.flv
 		 */		
 		public function mergeChannels (videoInput:ByteArray, soundInput:ByteArray, syncToAudio:Boolean = true):ByteArray 
 		{
+			videoInput = clone(videoInput);
+			soundInput = clone(soundInput);
 			var offset:int, offset1:int; 
 			var end:int, end1:int;
 			var tagLength:int, tagLength1:int;
@@ -336,11 +339,13 @@ package com.zoharbabin.bytearray.flv
 		 * @param videoInput	the FLV bytearray to slice.
 		 * @param start			in point in millisec.
 		 * @param end			out point in millisec.
+		 * @param pin2keyframe	if true will slice the video in the nearest keyframe rather than frame (pass true for better video results).
 		 * @return	A newly clipped FLV of the given FLV according to the in and out points.
 		 */             
-		public function slice (videoInput:ByteArray, in_point:int, out_point:int):ByteArray
+		public function slice (videoInput:ByteArray, in_point:int, out_point:int, pin2keyframe:Boolean = true):ByteArray
 		{
 			if ( out_point <= in_point ) throw new Error ("in point must be smaller than out point");
+			videoInput = clone(videoInput);
 			var offset:int; 
 			var end:int;
 			var tagLength:int;
@@ -433,6 +438,7 @@ package com.zoharbabin.bytearray.flv
 			var beforeTimeRead:uint = 0;
 			var totalTime:uint = 0;
 			for each (var videoInput:ByteArray in streams) {
+				videoInput = clone(videoInput);
 				// skip the headers of the inputs
 				videoInput.position = findTagsStart(videoInput);
 				// run for all the tags in the inputs, syncing to the desired channel (video/audio input)
@@ -467,6 +473,19 @@ package com.zoharbabin.bytearray.flv
 			_merged.position = durationVarPos;
 			_merged.writeBytes(writeNumberVariable(FlvWizard.DURATION, (timestampExtended << 8 | time)/1000));
 			return _merged;
+		}
+		
+		/**
+		 * Utility function to clone a bytearray to a new one (used to not mess up source bytearrays).
+		 * @param source	The bytearray to clone.
+		 * @return	A new bytearray containing the exact source bytes.
+		 **/ 
+		public function clone(source:ByteArray):ByteArray
+		{
+			var myBA:ByteArray = new ByteArray();
+			myBA.writeBytes(source);
+			myBA.position = 0;
+			return myBA;
 		}
 	}
 }
