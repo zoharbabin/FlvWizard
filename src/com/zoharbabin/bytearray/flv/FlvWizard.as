@@ -339,7 +339,7 @@ package com.zoharbabin.bytearray.flv
 		 * @param videoInput	the FLV bytearray to slice.
 		 * @param start			in point in millisec.
 		 * @param end			out point in millisec.
-		 * @param pin2keyframe	if true will slice the video in the nearest keyframe rather than frame (pass true for better video results).
+		 * @param pin2keyframe	if true will slice the video in the nearest keyframe rather than frame, true will usually produce better video results.
 		 * @return	A newly clipped FLV of the given FLV according to the in and out points.
 		 */             
 		public function slice (videoInput:ByteArray, in_point:int, out_point:int, pin2keyframe:Boolean = true):ByteArray
@@ -355,6 +355,12 @@ package com.zoharbabin.bytearray.flv
 			var streamID:int;
 			var time:int = 0;
 			var timestampExtended:int;
+			var keyframe:int;
+			var soundFormat:int;
+			var soundRate:int;
+			var soundSize:int;
+			var soundType:int;
+			var codecID:int;
 			var _sliced:ByteArray = new ByteArray ();
 			
 			//write FLV header
@@ -370,7 +376,7 @@ package com.zoharbabin.bytearray.flv
 			videoInput.position = findTagsStart(videoInput);
 			// run for all the tags in the inputs, syncing to the desired channel (video/audio input)
 			var foundStart:Boolean = false;
-			var startTime:int = 0;
+			var startTime:uint = 0;
 			while ( (videoInput.bytesAvailable > 0) && (time <= out_point) )
 			{
 				// read tag N from input
@@ -380,9 +386,28 @@ package com.zoharbabin.bytearray.flv
 				beforeTimeRead = videoInput.position;
 				time = (videoInput.readUnsignedShort() << 8) | videoInput.readUnsignedByte();
 				timestampExtended = videoInput.readUnsignedByte();
+				streamID = ((videoInput.readUnsignedShort() << 8) | videoInput.readUnsignedByte());
+				bodyTagHeader = videoInput.readByte();
+				end = videoInput.position + step + 3;
+				tagLength = end - offset;
+				
+				if ( currentTag == FlvWizard.AUDIO_TAG ) 
+				{
+					soundFormat = (bodyTagHeader & 0xF0) >> 4;
+					soundRate = (bodyTagHeader & 0xC) >> 2;
+					soundSize = (bodyTagHeader & 0x2) >> 1;
+					soundType = (bodyTagHeader & 0x1);
+					
+				} else if ( currentTag == FlvWizard.VIDEO_TAG ) {
+					keyframe = (bodyTagHeader & 0xF0) >> 4;
+					codecID = (bodyTagHeader & 0xF0) >> 4;
+				}
+				
 				if (time >= in_point && !foundStart) {
-					foundStart = true;
-					startTime = time;
+					if ((!pin2keyframe) || (pin2keyframe && (keyframe == 1))) {
+						foundStart = true;
+						startTime = time;
+					}
 				}
 				if (time >= in_point) {
 					//override the time with the time of the channel we're syncing to:
@@ -391,13 +416,9 @@ package com.zoharbabin.bytearray.flv
 					videoInput.writeByte((time-startTime) & 0xff); //time lower
 					videoInput.writeByte(((time-startTime)& 0xFF000000) >> 24); //TimestampExtended
 				}
-				streamID = ((videoInput.readUnsignedShort() << 8) | videoInput.readUnsignedByte());
-				bodyTagHeader = videoInput.readByte();
-				end = videoInput.position + step + 3;
-				tagLength = end - offset;
 				
 				// if it's time to cut and if it's not script-tags, write to the merged flv
-				if ( (time >= in_point) && (currentTag != FlvWizard.SCRIPT_TAG) ) 
+				if (foundStart && (currentTag != FlvWizard.SCRIPT_TAG) ) 
 					_sliced.writeBytes(videoInput, offset, tagLength);
 				
 				videoInput.position = end;
