@@ -346,9 +346,9 @@ package com.zoharbabin.bytearray.flv
 		 * @param pin2keyframe	if true will slice the video in the nearest keyframe rather than frame, true will usually produce better video results.
 		 * @return	A newly clipped FLV of the given FLV according to the in and out points.
 		 */             
-		public function slice (videoInput:ByteArray, in_point:int, out_point:int, pin2keyframe:Boolean = true):ByteArray
+		public function slice (videoInput:ByteArray, in_point:int, out_point:int = -1, pin2keyframe:Boolean = true):ByteArray
 		{
-			if ( out_point <= in_point ) throw new Error ("in point must be smaller than out point");
+			if ( (out_point >= 0) && (out_point <= in_point) ) throw new Error ("in point must be smaller than out point");
 			videoInput = clone(videoInput);
 			var offset:int; 
 			var end:int;
@@ -381,7 +381,7 @@ package com.zoharbabin.bytearray.flv
 			// run for all the tags in the inputs, syncing to the desired channel (video/audio input)
 			var foundStart:Boolean = false;
 			var startTime:uint = 0;
-			while ( (videoInput.bytesAvailable > 0) && (time <= out_point) )
+			while ( (videoInput.bytesAvailable > 0) && ((out_point < 0) || (time <= out_point)) )
 			{
 				// read tag N from input
 				offset = videoInput.position; 
