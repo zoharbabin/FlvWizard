@@ -1,5 +1,5 @@
 /**
- * In addition to the MIT license, it is requested that if you make use of this code
+ * In addition to the MIT license, if you make use of this code
  * you should notify the author.
  * 
  * This program is distributed under the terms of the MIT License as found 
