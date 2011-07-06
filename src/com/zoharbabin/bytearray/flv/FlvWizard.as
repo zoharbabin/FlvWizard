@@ -381,8 +381,15 @@ package com.zoharbabin.bytearray.flv
 			// run for all the tags in the inputs, syncing to the desired channel (video/audio input)
 			var foundStart:Boolean = false;
 			var startTime:uint = 0;
-			while ( (videoInput.bytesAvailable > 0) && ((out_point < 0) || (time <= out_point)) )
+			while (videoInput.bytesAvailable > 0)
 			{
+				if ((out_point > 0) && (time >= out_point)) {
+					if (!pin2keyframe) {
+						break;
+					} else if ((pin2keyframe && (keyframe == 1))) { 
+						break;
+					}	
+				}
 				// read tag N from input
 				offset = videoInput.position; 
 				currentTag = videoInput.readByte();
@@ -527,7 +534,7 @@ package com.zoharbabin.bytearray.flv
 			}
 			// update the duration variable in the FLV metadata
 			_merged.position = durationVarPos;
-			_merged.writeBytes(writeNumberVariable(FlvWizard.DURATION, (timestampExtended << 8 | time)/1000));
+			_merged.writeBytes(writeNumberVariable(FlvWizard.DURATION, (timestampExtended << 8 | totalTime)/1000));
 			return _merged;
 		}
 		
