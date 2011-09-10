@@ -17,7 +17,7 @@ package com.zoharbabin.bytearray.flv
 	/**
 	 * Utility class for manipulating FLV bits - trim, merge and more. 
 	 * 
-	 * @author Zohar Babin (z.babin@gmail.com)
+	 * @author Zohar Babin
 	 * @see http://www.zoharbabin.com
 	 * @see https://github.com/zoharbabin/FlvWizard/
 	 * @see http://www.openscreenproject.org/about/publications.html
